@@ -2,74 +2,40 @@
 import logging
 import os
 import sys
-import asyncio
 import queue
 from logging.handlers import QueueHandler, QueueListener
+import hashlib
 
-import requests
-import websockets
+import websocket 
 
-class HTTPLogHandler(logging.Handler):
+class WSLogHandler(logging.Handler):
     """
     Dummy logging handler that sends log records to a specified HTTP URL.
     """
-    def __init__(self, url, api_key=None, api_secret=None, username=None, password=None):
+    def __init__(self, url, username=None, password=''):
         super().__init__()
         self.url = url
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.username = username
-        self.password = password
+        self.headers = None
+        if username:
+            self.headers =\
+            [f"Authorization: {hashlib.md5(f'{username}:{password}'.encode('utf-8')).hexdigest()}"]
+        self.socket: websocket.WebSocket = None
+        self._reconnect()
+    
+    def _reconnect(self):
+        
+        if self.socket is None or self.socket.connected == False:
+            self.socket = websocket.create_connection(self.url, header = self.headers)
 
     def emit(self, record):
         try:
-            log_entry = self.format(record)
-
-            headers = {'Content-Type': 'application/json'}
-            data = {'log': log_entry}
-
-            # Add authentication if provided
-            auth = None
-            if self.username and self.password:
-                auth = (self.username, self.password)
-            elif self.api_key and self.api_secret:
-                headers['API_KEY'] = self.api_key
-                headers['API_SECRET'] = self.api_secret
-
-            # Send the log entry to the specified URL
-            response = requests.post(self.url, json=data, headers=headers, auth=auth)
-            response.raise_for_status()
+            self._reconnect()
+            message = '{"level":' + str(record.levelno) + ', "msg":"' + self.format(record) + '"}\n'
+            self.socket.send(message)
 
         except Exception:
             self.handleError(record)
 
-class WebSocketLogHandler(logging.Handler):
-    """
-    Real - used websocket handler. Allows you to connect to specified socket and send logs to it.
-    """
-    def __init__(self, url, api_key=None, api_secret=None, username=None, password=None):
-        super().__init__()
-        self.url = url
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.username = username
-        self.password = password
-        asyncio.run(self.setup(url))
-    
-    
-
-    def emit(self, message):
-        await self.ws.send(message)
-
-    async def setup(self, url):
-        async with websockets.connect(url) as websocket:
-            await websocket.send("Hello, Server!")
-            print("Message sent to server")
-
-            response = await websocket.recv()
-            print(f"Received: {response}")
-            self.ws = websocket
-        
         
 
     
@@ -83,7 +49,7 @@ def make_logger(name: str,
                 url: str = None,
                 method: str = None,
                 async_logging: bool = False,
-                format: str = '%(asctime)s / %(name)s / %(levelname)s / %(message)s',
+                format: str = '%(asctime)s | %(funcName)s | %(levelname)s | %(message)s',
                 datefmt: str = '%d-%m-%Y %H:%M:%S',
                 level: str = 'INFO',
                 **kwargs
@@ -103,8 +69,7 @@ def make_logger(name: str,
     """
 
     url_handlers = {
-        "HTTPLogHandler": HTTPLogHandler,
-        "WebSocketLogHandler": WebSocketLogHandler
+        "WSLogHandler": WSLogHandler
     }
     levels = {
         "DEBUG": logging.DEBUG,
@@ -191,10 +156,18 @@ def make_logger(name: str,
 
     return logger
 
+def logmsg(message, **kwargs):
+    if kwargs:
+        return f'{message} || ' + '; '.join(f'{k}: {v}' for k,v in kwargs.items() if v is not None)
+    return str(message)
+
 if __name__ == '__main__':
     logger = make_logger(name='suka', async_logging=True, write_to_url=True,
-                         url = "ws://localhost:8765", method="WebSocketLogHandler")
-    logger.error("sss")
+                         url = "ws://localhost:8081/ws", method="WSLogHandler", username="user1",
+                         password="password1")
+    logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 4))
+    import time
     logger.info('ppp')
-
+    time.sleep(2)
+    
     print(1)
