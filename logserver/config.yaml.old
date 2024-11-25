@@ -1,0 +1,25 @@
+port: "8081"
+websocket_path: "/ws"
+
+
+
+users:
+  - username: "user1"
+    password: "password1"
+  - username: "user2"
+    password: "password2"
+
+outputs:
+  - type: "stdout"
+    level: 0
+  - type: "TGBot"
+    chats: 
+      417766628: 20
+      -1002162451701: 40
+    API_KEY: "7326206507:AAG4VC3oJ5-0AhYsyiyffqywoQ7zhiMI4Bs"
+  - type: "Elastic"
+    level: 20
+    login: "kibanaadmin"
+    password: "test"
+    host: "https://kibanaadmin:test@worker.agicotech.ru"
+    index: "testshit"

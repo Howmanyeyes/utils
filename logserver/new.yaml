@@ -1,0 +1,2 @@
+port: "8008"
+websocket_path: "/ws"
