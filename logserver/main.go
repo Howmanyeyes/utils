@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"logserver/outputs"
 	"math"
 	"net/http"
 	"os"
 	"sync"
-	"utils/outputs"
 
 	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v2"
@@ -84,16 +84,11 @@ var Outputs []outputs.Output
 var config Config
 var usersMap = make(map[string]string)
 
+var LogQueue = make(chan *outputs.Log, 1000)
+
 // Add output to the list
 func addOutput(output outputs.Output) {
 	Outputs = append(Outputs, output)
-}
-
-// Digest authentication function
-func authenticateDigest(username, password, authHeader string) bool {
-	hash := md5.Sum([]byte(username + ":" + password))
-	hashedCredentials := hex.EncodeToString(hash[:])
-	return hashedCredentials == authHeader
 }
 
 // Handle WebSocket connection
@@ -120,10 +115,15 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	ip := r.RemoteAddr
+	log.Println("!> Client connected ", ip)
 
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
+			if websocket.IsCloseError(err) || websocket.IsUnexpectedCloseError(err) {
+				log.Println("!> Client quitted", ip, err)
+				return
+			}
 			log.Println("Error reading message:", err)
 			break
 		}
@@ -134,7 +134,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		log := outputs.Log{
+		logM := outputs.Log{
 			Level: 20,
 			IP:    ip,
 			Login: username,
@@ -142,31 +142,36 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Ensure log level field exists
 		if level, ok := logData["level"].(float64); ok {
-			log.Level = int(level)
+			logM.Level = int(level)
 		}
 
 		// Ensure msg field exists
 		if msg, ok := logData["msg"].(string); ok {
-			log.Msg = msg
+			logM.Msg = msg
 		}
-
-		processLog(log)
+		select {
+		case LogQueue <- &logM:
+			// Data enqueued successfully
+		default:
+			// Channel is full, handle accordingly
+			log.Println("Log channel is full, discarding data!")
+		}
+		//processLog(log)
 	}
 }
 
 // Process the log with each output
-func processLog(log outputs.Log) {
+func processLog(log *outputs.Log) {
 	var wg sync.WaitGroup
 	for _, output := range Outputs {
 		if log.Level >= output.GetLevel() {
 			wg.Add(1)
 			go func(out outputs.Output) {
 				defer wg.Done()
-				out.Process(log)
+				out.Process(*log)
 			}(output)
 		}
 	}
-
 	wg.Wait()
 }
 
@@ -204,6 +209,10 @@ func main() {
 		case "stdout":
 			level := outputConfig["level"].(int)
 			addOutput(&outputs.StdoutOutput{Level: level})
+		case "fileout":
+			level := outputConfig["level"].(int)
+			path := outputConfig["path"].(string)
+			addOutput(&outputs.FileOutput{Level: level, Path: path})
 		case "TGBot":
 			API_KEY := outputConfig["API_KEY"].(string)
 			chats, err := convertMap(outputConfig["chats"].(map[interface{}]interface{}))
@@ -223,9 +232,29 @@ func main() {
 		}
 	}
 
-	http.HandleFunc(config.WebSocketPath, handleWebSocket)
-	log.Printf("Server started at :%s\n", config.Port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", config.Port), nil); err != nil {
-		log.Fatal("ListenAndServe: ", err)
+	var worker_wg sync.WaitGroup
+
+	// Start worker goroutines to process requests from the channel
+	for i := 0; i < 5; i++ { // Start 5 workers
+		worker_wg.Add(1)
+		go func(id int) {
+			defer worker_wg.Done()
+			for reqData := range LogQueue {
+				// Process the data
+				processLog(reqData)
+			}
+			log.Printf("Worker %d exiting", id)
+		}(i)
 	}
+
+	go func() {
+		http.HandleFunc(config.WebSocketPath, handleWebSocket)
+		log.Printf("Server started at :%s\n", config.Port)
+		if err := http.ListenAndServe(fmt.Sprintf(":%s", config.Port), nil); err != nil {
+			log.Fatal("ListenAndServe: ", err)
+		}
+	}()
+	worker_wg.Wait()
+	close(LogQueue)
+
 }

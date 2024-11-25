@@ -163,8 +163,8 @@ def logmsg(message, **kwargs):
 
 if __name__ == '__main__':
     logger = make_logger(name='suka', async_logging=True, write_to_url=True,
-                         url = "ws://localhost:8081/ws", method="WSLogHandler", username="user1",
-                         password="password1")
+                         url = "ws://localhost:8008/ws", method="WSLogHandler", username="test",
+                         password="test")
     logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 4))
     import time
     logger.info('ppp')
