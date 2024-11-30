@@ -9,18 +9,16 @@ import (
 )
 
 type ElasticOutput struct {
-	Level    int    `json:"level"`
-	Login    string `json:"login"`
-	Password string `json:"password"`
-	Host     string `json:"host"`
-	Index    string `json:"index"`
+	Level int    `json:"level"`
+	Host  string `json:"host"`
+	Index string `json:"index"`
 }
 
 func (s *ElasticOutput) GetLevel() int {
 	return s.Level
 }
 
-var META = []string{"Timestamp", "FuncName", "LevelName", "Message"}
+var META = []string{"@timestamp", "FuncName", "LevelName", "message"}
 
 // '%(asctime)s | %(funcName)s | %(levelname)s | %(message)s'
 func (s *ElasticOutput) Parser(logmsg string) map[string]interface{} {
@@ -76,12 +74,11 @@ func (s *ElasticOutput) Process(log Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to send HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
-
 	// Check for successful response
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("received non-OK response from Elasticsearch: %d", resp.StatusCode)
 	}
+	defer resp.Body.Close()
 
 	// req, err := http.NewRequest("GET", "https://kibanaadmin:test@worker.agicotech.ru/", bytes.NewBuffer()) //, bytes.NewBuffer(jsonPayload))
 

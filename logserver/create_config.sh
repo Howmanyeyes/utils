@@ -5,12 +5,18 @@ if [[ "$port" == "" ]]; then
 port="8008"
 fi
 echo "port: \"$port\"" > .temp.yaml
-echo -n "Enter input endpoint relative path [default: \"/ws\"]: "
+echo -n "Enter input websocket endpoint relative path [default: \"/ws\"]: "
 read endpoint
 if [[ "$endpoint" == "" ]]; then
 endpoint="/ws"
 fi
 echo "websocket_path: \"$endpoint\"" >> .temp.yaml
+echo -n "Enter input http endpoint relative path [default: \"/http\"]: "
+read endpoint
+if [[ "$endpoint" == "" ]]; then
+endpoint="/http"
+fi
+echo "http_path: \"$endpoint\"" >> .temp.yaml
 
 userscnt="0"
 function inputUser {
@@ -60,7 +66,17 @@ cat >> .temp.yaml <<EOL
 EOL
 fi
 
-
+cat >> .temp.yaml <<EOL
+#  - type: "TGBot"
+#    level: 30
+#    API_KEY: "<Your telegram bot api key>"
+#    chats:
+#      <chat id>: 20 # 20 is log level for this chat id
+#  - type: "Elastic"
+#    level: 20
+#    host: "http://login%password@host:9200"
+#    index: "logserver"
+EOL
 
 echo -n "Done! do you want move result to current dir as config.yaml (y/n)? "
 read ans

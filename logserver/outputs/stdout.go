@@ -10,7 +10,7 @@ type StdoutOutput struct {
 
 func (s *StdoutOutput) Process(log Log) error {
 	if log.Level >= s.Level {
-		fmt.Printf(">> %+v\n", log)
+		fmt.Printf(">> %+v\n", log.Msg)
 	}
 	return nil
 }

@@ -5,7 +5,7 @@ import sys
 import queue
 from logging.handlers import QueueHandler, QueueListener
 import hashlib
-
+import httpx
 import websocket 
 
 class WSLogHandler(logging.Handler):
@@ -37,6 +37,21 @@ class WSLogHandler(logging.Handler):
             self.handleError(record)
 
         
+class HttpHandler(logging.Handler):
+    """
+    Dummy logging handler that sends log records to a specified HTTP URL.
+    """
+    def __init__(self, url, username=None, password=''):
+        super().__init__()
+        self.url = url
+        self.client = httpx.Client()
+        if username:
+            self.client.headers = {"Authorization": hashlib.md5(f'{username}:{password}'.encode('utf-8')).hexdigest()}
+    def emit(self, record):
+        try:
+            self.client.post(self.url, json=dict(level = record.levelno, msg = self.format(record))).status_code
+        except Exception:
+            self.handleError(record)
 
     
 
@@ -69,7 +84,9 @@ def make_logger(name: str,
     """
 
     url_handlers = {
-        "WSLogHandler": WSLogHandler
+        "WSLogHandler": WSLogHandler,
+        "HttpHandler": HttpHandler
+
     }
     levels = {
         "DEBUG": logging.DEBUG,
@@ -163,11 +180,11 @@ def logmsg(message, **kwargs):
 
 if __name__ == '__main__':
     logger = make_logger(name='suka', async_logging=True, write_to_url=True,
-                         url = "ws://localhost:8008/ws", method="WSLogHandler", username="test",
+                         url = "http://localhost:8888/sendlog", method="HttpHandler", username="test",
                          password="test")
-    logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 4))
+    logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 6))
     import time
-    logger.info('ppp')
-    time.sleep(2)
-    
-    print(1)
+    t0 = time.time_ns()
+    for i in range(100):
+        logger.info(logmsg('test', counter = i))
+    print((time.time_ns()-t0)/100)

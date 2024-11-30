@@ -1,3 +1,6 @@
 
 /.utils_venv
 config.yaml
+logserver/go.mod
+logserver/go.sum
+logserver/build/server

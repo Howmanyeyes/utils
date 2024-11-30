@@ -3,8 +3,7 @@ sudo apt update
 command -v go >/dev/null 2>&1 || { echo >&2 "I require golang but it's not installed."; sudo apt install -y golang-go;}
 
 rm go.mod go.sum
-go mod init logserver
-go mod tidy
+go mod init logserver && go mod tidy
 go build -o ./build/server
 
 wd="$(pwd)"
