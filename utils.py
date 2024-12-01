@@ -11,6 +11,10 @@ from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequenc
 from logging import LogRecord
 import json
 
+class NonShitQueueHandler(QueueHandler):
+    def prepare(self, record):
+        return record
+
 class WSLogHandler(logging.Handler):
     """
     Dummy logging handler that sends log records to a specified HTTP URL.
@@ -72,14 +76,16 @@ class JsonFormatter(logging.Formatter):
                     message = record.message, 
                     levelname = record.levelname,
                     timestamp = self.formatTime(record, self.datefmt),
-                    funcName = record.funcName)
+                    funcName = record.funcName,
+                    extras = {}
+                    )
         if record.exc_info:
             data['error'] = self.formatException(record.exc_info)
         if record.args:
             if isinstance(record.args, Mapping):
-                data.update(record.args)
+                data['extras'] = record.args
             elif isinstance(record.args, Iterable):
-                data.update({f'arg{i}':v for i, v in enumerate(record.args)})
+                data['extras'] = {f'arg{i}':v for i, v in enumerate(record.args)}
         return data
 
 
@@ -99,7 +105,7 @@ def setup_logger(name: str = 'default',
         main_logger.handlers.clear()
 
     log_queue = queue.Queue(-1)
-    queue_handler = QueueHandler(log_queue)
+    queue_handler = NonShitQueueHandler(log_queue)
     main_logger.addHandler(queue_handler)
 
     if filepath or stdout:
@@ -261,12 +267,13 @@ def logmsg(message, **kwargs):
 if __name__ == '__main__':
     logger = setup_logger("testlogger",
                           filepath="./log.txt",
-                          logserver_url='http://localhost:8000/logs/log',
+                          logserver_url='http://localhost:8888/logs/log',
                           username = 'test',
-                          password = "testtest")
+                          password = "test")
     
     for i in range(10):
         logger.warning('i fucked a cow', dict(counter = i))
     
     import time
     time.sleep(1)
+    input()

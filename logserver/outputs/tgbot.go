@@ -17,7 +17,7 @@ func (s *TGOutput) GetLevel() int {
 	return s.Level
 }
 
-func (s *TGOutput) Process(log Log) error {
+func (s *TGOutput) Process(log LogS) error {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.API_KEY)
 
 	for userID, level := range s.Chats {
@@ -26,7 +26,7 @@ func (s *TGOutput) Process(log Log) error {
 		}
 		payload := map[string]interface{}{
 			"chat_id": userID,
-			"text":    log.Msg,
+			"text":    log.StrFmt(),
 		}
 		jsonPayload, err := json.Marshal(payload)
 		if err != nil {

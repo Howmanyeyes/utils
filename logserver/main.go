@@ -86,7 +86,7 @@ var Outputs []outputs.Output
 var config Config
 var usersMap = make(map[string]string)
 
-var LogQueue = make(chan *outputs.Log, 1000)
+var LogQueue = make(chan *outputs.LogS, 1000)
 
 // Add output to the list
 func addOutput(output outputs.Output) {
@@ -119,33 +119,23 @@ func handleHttp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to read request body", http.StatusInternalServerError)
 		return
 	}
-	ip := r.RemoteAddr
 	defer r.Body.Close()
-
-	if err := parseAndQueue(body, ip, username); err != nil {
+	ip := r.RemoteAddr
+	log.Debug("!> http request from ", ip)
+	if err := parseAndQueue(body, username); err != nil {
 		log.Warn(err)
 	}
 }
 
-func parseAndQueue(message []byte, ip string, login string) error {
-	var logData map[string]interface{}
+func parseAndQueue(message []byte, login string) error {
+	var logData outputs.LogS
 	if err := json.Unmarshal(message, &logData); err != nil {
 		return fmt.Errorf("invalid JSON format: %v", err)
 	}
+	logData.Login = login
 
-	logM := outputs.Log{Level: 20, Msg: "", Login: login, IP: ip}
-
-	// Ensure log level field exists
-	if level, ok := logData["level"].(float64); ok {
-		logM.Level = int(level)
-	}
-
-	// Ensure msg field exists
-	if msg, ok := logData["msg"].(string); ok {
-		logM.Msg = msg
-	}
 	select {
-	case LogQueue <- &logM:
+	case LogQueue <- &logData:
 		// Data enqueued successfully
 	default:
 		// Channel is full, handle accordingly
@@ -189,7 +179,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			log.Warn("Error reading message:", err)
 			break
 		}
-		if err := parseAndQueue(message, ip, username); err != nil {
+		if err := parseAndQueue(message, username); err != nil {
 			log.Warn(err)
 		}
 
@@ -198,7 +188,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 // Process the log with each output
-func processLog(logstruct *outputs.Log) {
+func processLog(logstruct *outputs.LogS) {
 	var wg sync.WaitGroup
 	for _, output := range Outputs {
 		if logstruct.Level >= output.GetLevel() {

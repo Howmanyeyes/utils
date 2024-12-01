@@ -9,10 +9,10 @@ class MyHandler(SimpleHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
         response = f"Received POST data: {post_data.decode('utf-8')}"
-        print(response.encode('utf-8'))
+        print(response)
 
-server_address = ('', 8000)
+server_address = ('', 8887)
 httpd = HTTPServer(server_address, MyHandler)
 
-print("Starting server on port 8000...")
+print("Starting server on port 8888...")
 httpd.serve_forever()
