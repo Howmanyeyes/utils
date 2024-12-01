@@ -47,14 +47,10 @@ func (s *ElasticOutput) Parser(logmsg string) map[string]interface{} {
 }
 
 func (s *ElasticOutput) Process(log LogS) error {
-	url := fmt.Sprintf("%s/%s/_doc", s.Host, s.Index)
 
-	// Marshal log to JSON
-	//jsonPayload, err := json.Marshal(log)
-	//if err != nil {
-	//	return fmt.Errorf("failed to marshal log to JSON: %w", err)
-	//}
-	data := maps.Clone[map[string]interface{}](log.Extras)
+	url := fmt.Sprintf("%s/%s-%s/_doc", s.Host, s.Index, log.Login)
+
+	data := maps.Clone(log.Extras)
 	data["level"] = log.Level
 	data["message"] = log.Message
 	data["levelName"] = log.LevelName
