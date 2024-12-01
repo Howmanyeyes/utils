@@ -182,9 +182,6 @@ if __name__ == '__main__':
     logger = make_logger(name='suka', async_logging=True, write_to_url=True,
                          url = "ws://localhost:8008/ws", method="WSLogHandler", username="test",
                          password="test")
-    logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 4))
-                         url = "http://localhost:8888/sendlog", method="HttpHandler", username="test",
-                         password="test")
     logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 6))
     import time
     t0 = time.time_ns()
