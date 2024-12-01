@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 )
@@ -45,7 +46,7 @@ func (s *ElasticOutput) Parser(logmsg string) map[string]interface{} {
 	return ans
 }
 
-func (s *ElasticOutput) Process(log Log) error {
+func (s *ElasticOutput) Process(log LogS) error {
 	url := fmt.Sprintf("%s/%s/_doc", s.Host, s.Index)
 
 	// Marshal log to JSON
@@ -53,11 +54,15 @@ func (s *ElasticOutput) Process(log Log) error {
 	//if err != nil {
 	//	return fmt.Errorf("failed to marshal log to JSON: %w", err)
 	//}
-	jsonik := s.Parser(log.Msg)
-	jsonik["ip"] = log.IP
-	jsonik["login"] = log.Login
-	jsonik["level"] = log.Level
-	jsonPayload, err := json.Marshal(jsonik)
+	data := maps.Clone[map[string]interface{}](log.Extras)
+	data["level"] = log.Level
+	data["message"] = log.Message
+	data["levelName"] = log.LevelName
+	data["login"] = log.Login
+	data["funcName"] = log.FuncName
+	data["@timestamp"] = log.Timestamp
+
+	jsonPayload, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("failed to marshal log to JSON: %w", err)
 	}

@@ -68,13 +68,12 @@ fi
 
 cat >> .temp.yaml <<EOL
 #  - type: "TGBot"
-#    level: 30
 #    API_KEY: "<Your telegram bot api key>"
 #    chats:
 #      <chat id>: 20 # 20 is log level for this chat id
 #  - type: "Elastic"
 #    level: 20
-#    host: "http://login%password@host:9200"
+#    host: "http://login%password@host:9200" 
 #    index: "logserver"
 EOL
 

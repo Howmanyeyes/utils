@@ -7,6 +7,13 @@ from logging.handlers import QueueHandler, QueueListener
 import hashlib
 import httpx
 import websocket 
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
+from logging import LogRecord
+import json
+
+class NonShitQueueHandler(QueueHandler):
+    def prepare(self, record):
+        return record
 
 class WSLogHandler(logging.Handler):
     """
@@ -23,15 +30,14 @@ class WSLogHandler(logging.Handler):
         self._reconnect()
     
     def _reconnect(self):
-        
         if self.socket is None or self.socket.connected == False:
             self.socket = websocket.create_connection(self.url, header = self.headers)
 
     def emit(self, record):
         try:
             self._reconnect()
-            message = '{"level":' + str(record.levelno) + ', "msg":"' + self.format(record) + '"}\n'
-            self.socket.send(message)
+            data = json.dumps(self.format(record), ensure_ascii= False, indent= 0)
+            self.socket.send(data)
 
         except Exception:
             self.handleError(record)
@@ -49,10 +55,89 @@ class HttpHandler(logging.Handler):
             self.client.headers = {"Authorization": hashlib.md5(f'{username}:{password}'.encode('utf-8')).hexdigest()}
     def emit(self, record):
         try:
-            self.client.post(self.url, json=dict(level = record.levelno, msg = self.format(record))).status_code
+            self.client.post(self.url, json=self.format(record)).status_code
         except Exception:
             self.handleError(record)
 
+class TextFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        # Start with the basic log format
+        base_message = super().format(record)
+        # Check if "kwargs" attribute exists in the log `record`. If yes, format and append them
+        if isinstance(record.args, Mapping):
+            formatted_kwargs = " || " + ", ".join(f"{key}: {value}" for key, value in record.args.items())
+            return base_message + formatted_kwargs
+        else:
+            return base_message
+        
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> dict:
+        data = dict(level = record.levelno,
+                    message = record.message, 
+                    levelname = record.levelname,
+                    timestamp = self.formatTime(record, self.datefmt),
+                    funcName = record.funcName,
+                    extras = {}
+                    )
+        if record.exc_info:
+            data['error'] = self.formatException(record.exc_info)
+        if record.args:
+            if isinstance(record.args, Mapping):
+                data['extras'] = record.args
+            elif isinstance(record.args, Iterable):
+                data['extras'] = {f'arg{i}':v for i, v in enumerate(record.args)}
+        return data
+
+
+def setup_logger(name: str = 'default',
+                encoding: str = 'utf-8',
+                stdout: bool = True,
+                filepath: str | None = None,
+                logserver_url: str | None = None,
+                text_format: str = '%(asctime)s | %(funcName)s | %(levelname)s | %(message)s',
+                datefmt: str = '%Y-%m-%dT%H:%M:%S%z',
+                level: int | str = 20,
+                **kwargs
+                 ):
+    main_logger = logging.getLogger(name)
+    main_logger.setLevel(level=level)
+    if main_logger.hasHandlers():
+        main_logger.handlers.clear()
+
+    log_queue = queue.Queue(-1)
+    queue_handler = NonShitQueueHandler(log_queue)
+    main_logger.addHandler(queue_handler)
+
+    if filepath or stdout:
+        txtformatter = TextFormatter(fmt= text_format, datefmt=datefmt)
+
+    handlers = []
+    if filepath:
+        dir = os.path.dirname(filepath)
+        os.makedirs(dir, exist_ok=True)
+        fileh = logging.FileHandler(filepath, encoding= encoding)
+        fileh.setFormatter(txtformatter)
+        handlers.append(fileh)
+    
+    if stdout:
+        stdouth = logging.StreamHandler(sys.stdout)
+        stdouth.setFormatter(txtformatter)
+        handlers.append(stdouth)
+
+    if logserver_url:
+        handler_type = WSLogHandler if logserver_url.startswith('ws') else HttpHandler
+        username = kwargs.get('username', None)
+        password = kwargs.get('password', None)
+        logserverh = handler_type(url= logserver_url, username=username, password=password)
+        jsfmt = JsonFormatter(datefmt=datefmt)
+        logserverh.setFormatter(jsfmt)
+        handlers.append(logserverh)
+
+    listener = QueueListener(log_queue, *handlers)
+    listener.start()
+    main_logger.listener = listener
+    return main_logger
+    
     
 
 def make_logger(name: str,
@@ -65,11 +150,12 @@ def make_logger(name: str,
                 method: str = None,
                 async_logging: bool = False,
                 format: str = '%(asctime)s | %(funcName)s | %(levelname)s | %(message)s',
-                datefmt: str = '%d-%m-%Y %H:%M:%S',
+                datefmt: str = '%Y-%m-%dT%H:%M:%S%z',
                 level: str = 'INFO',
                 **kwargs
                 ) -> logging.Logger:
     """
+    Deprecated!
     Function to make your perfect logger!\n
     - `name`, `write_to_console` and `encoding` are self-explanatory\n
     - `path_to_file` must be a list that contains directions to your desired folder starting from 
@@ -179,12 +265,15 @@ def logmsg(message, **kwargs):
     return str(message)
 
 if __name__ == '__main__':
-    logger = make_logger(name='suka', async_logging=True, write_to_url=True,
-                         url = "ws://localhost:8008/ws", method="WSLogHandler", username="test",
-                         password="test")
-    logger.error(logmsg(message = "sss", fuck = "sssssasdfgadsfgsadgfr", six = 6))
+    logger = setup_logger("testlogger",
+                          filepath="./log.txt",
+                          logserver_url='http://localhost:8888/logs/log',
+                          username = 'test',
+                          password = "test")
+    
+    for i in range(10):
+        logger.warning('i fucked a cow', dict(counter = i))
+    
     import time
-    t0 = time.time_ns()
-    for i in range(100):
-        logger.info(logmsg('test', counter = i))
-    print((time.time_ns()-t0)/100)
+    time.sleep(1)
+    input()

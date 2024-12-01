@@ -6,3 +6,4 @@ logserver/go.sum
 logserver/build/server
 /env
 /build
+log.txt

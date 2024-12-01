@@ -9,14 +9,14 @@ type FileOutput struct {
 	Path  string `json:"path"`
 }
 
-func (s *FileOutput) Process(log Log) error {
+func (s *FileOutput) Process(log LogS) error {
 	if log.Level >= s.Level {
 		f, err := os.OpenFile(s.Path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
-		if _, err = f.WriteString(log.Msg + "\n"); err != nil {
+		if _, err = f.WriteString(log.StrFmt() + "\n"); err != nil {
 			return err
 		}
 	}

@@ -8,9 +8,9 @@ type StdoutOutput struct {
 	Level int `json:"level"`
 }
 
-func (s *StdoutOutput) Process(log Log) error {
+func (s *StdoutOutput) Process(log LogS) error {
 	if log.Level >= s.Level {
-		fmt.Printf(">> %+v\n", log.Msg)
+		fmt.Println(log.StrFmt())
 	}
 	return nil
 }
