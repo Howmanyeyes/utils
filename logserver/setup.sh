@@ -8,6 +8,10 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/logserver}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/logserver}"
 CONFIG_FILE="${CONFIG_FILE:-$CONFIG_DIR/config.yaml}"
 SOURCE_CONFIG="${SOURCE_CONFIG:-}"
+GO_MIN_VERSION="${GO_MIN_VERSION:-1.21}"
+GO_VERSION="${GO_VERSION:-1.22.12}"
+GO_INSTALL_DIR="${GO_INSTALL_DIR:-/usr/local/go}"
+GO_BIN=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$(mktemp -d)"
@@ -31,15 +35,66 @@ run_as_root() {
     fi
 }
 
+version_ge() {
+    [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" == "$2" ]]
+}
+
+go_arch() {
+    case "$(uname -m)" in
+        x86_64 | amd64)
+            echo "amd64"
+            ;;
+        aarch64 | arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "Unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+    esac
+}
+
+detect_go() {
+    local candidate
+
+    for candidate in "$GO_INSTALL_DIR/bin/go" "$(command -v go || true)"; do
+        if [[ -x "$candidate" ]]; then
+            local version
+            version="$("$candidate" version | awk '{print $3}' | sed 's/^go//')"
+            if version_ge "$version" "$GO_MIN_VERSION"; then
+                GO_BIN="$candidate"
+                echo "Using Go $version from $GO_BIN"
+                return 0
+            fi
+            echo "Found Go $version at $candidate, but $SERVICE_NAME requires Go $GO_MIN_VERSION or newer."
+        fi
+    done
+
+    return 1
+}
+
 install_golang() {
-    if command -v go >/dev/null 2>&1; then
-        echo "Go is already installed: $(go version)"
+    if detect_go; then
         return
     fi
 
-    echo "Go is not installed. Installing golang-go with apt..."
+    local archive
+    local download_url
+    archive="go${GO_VERSION}.linux-$(go_arch).tar.gz"
+    download_url="https://go.dev/dl/$archive"
+
+    echo "Installing Go $GO_VERSION to $GO_INSTALL_DIR..."
     run_as_root apt-get update
-    run_as_root apt-get install -y golang-go
+    run_as_root apt-get install -y ca-certificates curl tar
+
+    curl -fsSL "$download_url" -o "$BUILD_DIR/$archive"
+    run_as_root rm -rf "$GO_INSTALL_DIR"
+    run_as_root tar -C "$(dirname "$GO_INSTALL_DIR")" -xzf "$BUILD_DIR/$archive"
+
+    if ! detect_go; then
+        echo "Installed Go, but could not find a usable Go $GO_MIN_VERSION+ binary." >&2
+        exit 1
+    fi
 }
 
 create_service_user() {
@@ -104,9 +159,9 @@ build_server() {
 
     (
         cd "$BUILD_DIR"
-        go mod init logserver >/dev/null
-        go mod tidy
-        go build -o server
+        "$GO_BIN" mod init logserver >/dev/null
+        "$GO_BIN" mod tidy
+        "$GO_BIN" build -o server
     )
 }
 
