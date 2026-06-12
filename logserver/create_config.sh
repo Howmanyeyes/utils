@@ -71,6 +71,10 @@ cat >> .temp.yaml <<EOL
 #    API_KEY: "<Your telegram bot api key>"
 #    chats:
 #      <chat id>: 20 # 20 is log level for this chat id
+#    topics:
+#      - chat_id: <supergroup chat id>
+#        message_thread_id: <topic id>
+#        level: 20
 #  - type: "Elastic"
 #    level: 20
 #    host: "http://login%password@host:9200" 

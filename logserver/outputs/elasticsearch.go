@@ -51,6 +51,9 @@ func (s *ElasticOutput) Process(log LogS) error {
 	url := fmt.Sprintf("%s/%s-%s/_doc", s.Host, s.Index, log.Login)
 
 	data := maps.Clone(log.Extras)
+	if data == nil {
+		data = make(map[string]interface{})
+	}
 	data["level"] = log.Level
 	data["message"] = log.Message
 	data["levelName"] = log.LevelName

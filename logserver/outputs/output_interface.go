@@ -12,7 +12,7 @@ type LogS struct {
 	FuncName  string `json:"funcName"`
 	LevelName string `json:"levelName"`
 	Login     string
-	Extras    map[string]interface{} `lson:"extras"`
+	Extras    map[string]interface{} `json:"extras"`
 }
 
 type Output interface {

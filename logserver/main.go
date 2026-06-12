@@ -52,6 +52,65 @@ func minMapValue(m map[int]int) (int, int) {
 	return minKey, minValue
 }
 
+func asInt(value interface{}) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		if v == float64(int(v)) {
+			return int(v), true
+		}
+	}
+	return 0, false
+}
+
+func parseTGTopics(input interface{}) ([]outputs.TGTopic, error) {
+	if input == nil {
+		return nil, nil
+	}
+
+	items, ok := input.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("topics must be a list")
+	}
+
+	topics := make([]outputs.TGTopic, 0, len(items))
+	for i, item := range items {
+		topicMap, ok := item.(map[interface{}]interface{})
+		if !ok {
+			return nil, fmt.Errorf("topic %d must be a map", i)
+		}
+
+		chatID, ok := asInt(topicMap["chat_id"])
+		if !ok {
+			return nil, fmt.Errorf("topic %d has invalid chat_id", i)
+		}
+
+		threadID, ok := asInt(topicMap["message_thread_id"])
+		if !ok {
+			threadID, ok = asInt(topicMap["thread_id"])
+		}
+		if !ok {
+			return nil, fmt.Errorf("topic %d has invalid message_thread_id", i)
+		}
+
+		level, ok := asInt(topicMap["level"])
+		if !ok {
+			return nil, fmt.Errorf("topic %d has invalid level", i)
+		}
+
+		topics = append(topics, outputs.TGTopic{
+			ChatID:          chatID,
+			MessageThreadID: threadID,
+			Level:           level,
+		})
+	}
+
+	return topics, nil
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -244,13 +303,29 @@ func main() {
 			addOutput(&outputs.FileOutput{Level: level, Path: path})
 		case "TGBot":
 			API_KEY := outputConfig["API_KEY"].(string)
-			chats, err := convertMap(outputConfig["chats"].(map[interface{}]interface{}))
+			chats := make(map[int]int)
+			if chatsConfig, ok := outputConfig["chats"].(map[interface{}]interface{}); ok {
+				var err error
+				chats, err = convertMap(chatsConfig)
+				if err != nil {
+					log.Fatalf("Error loading telegram chats: %v", err)
+					continue
+				}
+			}
+
+			topics, err := parseTGTopics(outputConfig["topics"])
 			if err != nil {
-				log.Fatalf("Error loading users: %v", err)
+				log.Fatalf("Error loading telegram topics: %v", err)
 				continue
 			}
+
 			_, minlevel := minMapValue(chats)
-			addOutput(&outputs.TGOutput{Level: minlevel, Chats: chats, API_KEY: API_KEY})
+			for _, topic := range topics {
+				if minlevel == -1 || topic.Level < minlevel {
+					minlevel = topic.Level
+				}
+			}
+			addOutput(&outputs.TGOutput{Level: minlevel, Chats: chats, Topics: topics, API_KEY: API_KEY})
 		case "Elastic":
 			level := outputConfig["level"].(int)
 			host := outputConfig["host"].(string)
